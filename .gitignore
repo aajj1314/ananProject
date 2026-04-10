@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+.DS_Store
+node_modules/
+dist/
+.venv/
+.env
+elderly_insole_dev.db
+test_elderly_insole.db

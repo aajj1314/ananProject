@@ -1,0 +1,45 @@
+version: "3.8"
+
+services:
+  backend:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    image: elderly-care-backend:latest
+    env_file:
+      - ../.env.production.example
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+      - redis
+
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+    image: elderly-care-frontend:latest
+    ports:
+      - "8080:8080"
+    depends_on:
+      - backend
+
+  db:
+    image: mysql:8.0.36
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: elderly_care
+      MYSQL_USER: user
+      MYSQL_PASSWORD: password
+    command: --default-authentication-plugin=mysql_native_password
+    volumes:
+      - db_data:/var/lib/mysql
+
+  redis:
+    image: redis:7.2.4
+    volumes:
+      - redis_data:/data
+
+volumes:
+  db_data:
+  redis_data:
