@@ -43,10 +43,11 @@ export function getMapConfig(): MapConfig {
     provider,
     apiKey,
     amap: {
-      ...DEFAULT_CONFIG.amap,
+      version: DEFAULT_CONFIG.amap!.version,
+      plugins: [...DEFAULT_CONFIG.amap!.plugins],
     },
     baidu: {
-      ...DEFAULT_CONFIG.baidu,
+      version: DEFAULT_CONFIG.baidu!.version,
       ak: apiKey,
     },
   }

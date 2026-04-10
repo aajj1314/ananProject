@@ -484,18 +484,22 @@ Authorization: Bearer <admin-token>
 
 ## 部署指南
 
-### Docker 部署
+### Docker 部署（推荐）
+
+**重要**: Ubuntu 24.04 及以上版本采用 PEP 668 规范，禁止直接使用 pip 安装全局包。因此强烈推荐使用 Docker 部署方式。
 
 使用 docker-compose 一键部署：
 
 ```bash
 cd deploy
+cp .env.example .env
 docker-compose up -d
 ```
 
 服务将启动后访问：
 - 前端：http://localhost:8080
 - 后端：http://localhost:8000
+- API 文档：http://localhost:8000/docs
 
 ### 生产环境配置
 

@@ -1,45 +1,59 @@
 version: "3.8"
 
 services:
+  # Backend API service
   backend:
     build:
       context: ../backend
       dockerfile: Dockerfile
     image: elderly-care-backend:latest
-    env_file:
-      - ../.env.production.example
+    container_name: elderly-care-backend
+    environment:
+      - APP_NAME=elderly-insole-platform
+      - APP_ENV=production
+      - DEBUG=false
+      - API_V1_PREFIX=/api/v1
+      - DATABASE_URL=sqlite+aiosqlite:///./data/elderly_insole.db
+      - REDIS_URL=redis://redis:6379/0
+      - JWT_SECRET=${JWT_SECRET:-production-secret-key-change-me}
+      - JWT_ALGORITHM=HS256
+      - JWT_EXPIRE_MINUTES=1440
+      - RATE_LIMIT_REQUESTS=60
+      - RATE_LIMIT_WINDOW_SECONDS=60
+      - CACHE_TTL_SECONDS=120
+      - NOTIFICATION_CHANNELS=in_app
     ports:
       - "8000:8000"
+    volumes:
+      - backend_data:/app/data
     depends_on:
-      - db
       - redis
+    restart: unless-stopped
 
+  # Frontend web service
   frontend:
     build:
       context: ../frontend
       dockerfile: Dockerfile
     image: elderly-care-frontend:latest
+    container_name: elderly-care-frontend
     ports:
       - "8080:8080"
     depends_on:
       - backend
+    restart: unless-stopped
 
-  db:
-    image: mysql:8.0.36
-    environment:
-      MYSQL_ROOT_PASSWORD: root
-      MYSQL_DATABASE: elderly_care
-      MYSQL_USER: user
-      MYSQL_PASSWORD: password
-    command: --default-authentication-plugin=mysql_native_password
-    volumes:
-      - db_data:/var/lib/mysql
-
+  # Redis cache service (optional but recommended)
   redis:
-    image: redis:7.2.4
+    image: redis:7.2.4-alpine
+    container_name: elderly-care-redis
     volumes:
       - redis_data:/data
+    restart: unless-stopped
 
+# Volumes for persistent data
 volumes:
-  db_data:
+  backend_data:
+    driver: local
   redis_data:
+    driver: local
