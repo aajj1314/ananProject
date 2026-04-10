@@ -30,6 +30,14 @@ class Settings(BaseSettings):
     rate_limit_requests: int = Field(default=60, alias="RATE_LIMIT_REQUESTS")
     rate_limit_window_seconds: int = Field(default=60, alias="RATE_LIMIT_WINDOW_SECONDS")
     cache_ttl_seconds: int = Field(default=120, alias="CACHE_TTL_SECONDS")
+    notification_channels: list[str] = Field(default=["in_app"], alias="NOTIFICATION_CHANNELS")
+    sms_provider: str | None = Field(default=None, alias="SMS_PROVIDER")
+    sms_api_key: str | None = Field(default=None, alias="SMS_API_KEY")
+    sms_api_secret: str | None = Field(default=None, alias="SMS_API_SECRET")
+    sms_from_number: str | None = Field(default=None, alias="SMS_FROM_NUMBER")
+    wechat_app_id: str | None = Field(default=None, alias="WECHAT_APP_ID")
+    wechat_app_secret: str | None = Field(default=None, alias="WECHAT_APP_SECRET")
+    wechat_template_id: str | None = Field(default=None, alias="WECHAT_TEMPLATE_ID")
 
 
 @lru_cache(maxsize=1)

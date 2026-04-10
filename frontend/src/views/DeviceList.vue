@@ -1,7 +1,12 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue'
+import { useRouter } from 'vue-router'
 
 import { apiClient } from '@/api/api'
+import { useAuthStore } from '@/stores/auth'
+
+const router = useRouter()
+const authStore = useAuthStore()
 
 interface Device {
   device_id: string
@@ -91,7 +96,24 @@ const removeDevice = async (device: Device) => {
   }
 }
 
+const logout = () => {
+  authStore.logout()
+  router.push('/login')
+}
+
+const loadUserProfile = async () => {
+  try {
+    if (!authStore.user && authStore.token) {
+      const response = await apiClient.get('/auth/profile')
+      authStore.setUser(response.data.data)
+    }
+  } catch (error) {
+    // If profile fails, user might need to re-login
+  }
+}
+
 onMounted(() => {
+  loadUserProfile()
   loadDevices()
 })
 </script>
@@ -100,9 +122,21 @@ onMounted(() => {
   <main class="shell">
     <section class="grid" style="grid-template-columns: 1.2fr 0.8fr; align-items:start;">
       <div class="panel" style="padding: 28px;">
-        <p class="muted">Device Center</p>
-        <h1 class="hero-title" style="font-size: clamp(2.4rem, 6vw, 4.6rem);">设备与轨迹概览</h1>
-        <p class="muted">第四阶段已开始接入电子围栏能力。设备列表继续负责绑定管理，围栏与轨迹详情统一放在地图页处理。</p>
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap;">
+          <div>
+            <p class="muted">Device Center</p>
+            <h1 class="hero-title" style="font-size: clamp(2.4rem, 6vw, 4.6rem);">设备与轨迹概览</h1>
+            <p class="muted">第五阶段完成 RBAC、多渠道通知、健康检查与运营指标。</p>
+          </div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;">
+            <router-link v-if="authStore.isAdmin" class="button-primary" to="/admin" style="background:linear-gradient(135deg,#33514b,#1d2f2a);">
+              管理后台
+            </router-link>
+            <button class="button-primary" type="button" @click="logout" style="background:linear-gradient(135deg,#6f2d20,#3c120d);">
+              退出登录
+            </button>
+          </div>
+        </div>
       </div>
       <div class="panel" style="padding: 24px;">
         <h2>绑定新设备</h2>

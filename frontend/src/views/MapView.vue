@@ -3,6 +3,8 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute } from 'vue-router'
 
 import { apiClient } from '@/api/api'
+import CoordinateMap from '@/components/CoordinateMap.vue'
+import PathReplayPlayer from '@/components/PathReplayPlayer.vue'
 
 interface Fence {
   id: number
@@ -23,6 +25,14 @@ interface FenceEvent {
   transitioned: boolean
 }
 
+interface LocationPoint {
+  latitude: number
+  longitude: number
+  timestamp: string
+  battery?: number
+  speed?: number
+}
+
 const route = useRoute()
 const latestLocation = ref<Record<string, unknown> | null>(null)
 const history = ref<Array<Record<string, unknown>>>([])
@@ -33,6 +43,8 @@ const fences = ref<Fence[]>([])
 const errorText = ref('')
 const savingFence = ref(false)
 const editingFenceId = ref<number | null>(null)
+const showReplay = ref(false)
+const replayPoint = ref<LocationPoint | null>(null)
 const fenceForm = reactive({
   name: '',
   center_latitude: '',
@@ -41,15 +53,38 @@ const fenceForm = reactive({
   is_active: true,
 })
 
-const latitude = computed(() => Number(latestLocation.value?.latitude ?? 0))
-const longitude = computed(() => Number(latestLocation.value?.longitude ?? 0))
+const latitude = computed(() => Number(replayPoint.value?.latitude ?? latestLocation.value?.latitude ?? 0))
+const longitude = computed(() => Number(replayPoint.value?.longitude ?? latestLocation.value?.longitude ?? 0))
 const fenceEvents = computed(
   () => (latestLocation.value?.fence_events as FenceEvent[] | undefined) ?? [],
 )
-const plotPoint = computed(() => {
-  const x = ((longitude.value + 180) / 360) * 100
-  const y = ((90 - latitude.value) / 180) * 100
-  return { x, y }
+
+const historyPoints = computed((): LocationPoint[] => {
+  return history.value.map((item) => ({
+    latitude: Number(item.latitude),
+    longitude: Number(item.longitude),
+    timestamp: String(item.timestamp),
+    battery: item.battery ? Number(item.battery) : undefined,
+    speed: item.speed ? Number(item.speed) : undefined,
+  }))
+})
+
+const displayHistory = computed(() => {
+  if (!showReplay.value) {
+    return historyPoints.value
+  }
+  return historyPoints.value
+})
+
+const mapFences = computed(() => {
+  return fences.value
+    .filter((f) => f.is_active)
+    .map((f) => ({
+      center_latitude: f.center_latitude,
+      center_longitude: f.center_longitude,
+      radius_meters: f.radius_meters,
+      name: f.name,
+    }))
 })
 
 const resetFenceForm = () => {
@@ -59,6 +94,10 @@ const resetFenceForm = () => {
   fenceForm.radius_meters = '300'
   fenceForm.is_active = true
   editingFenceId.value = null
+}
+
+const handleReplayPointChange = (point: LocationPoint | null, _index: number) => {
+  replayPoint.value = point
 }
 
 const loadFences = async () => {
@@ -160,19 +199,19 @@ onMounted(() => {
       <div class="panel" style="padding: 24px;">
         <p class="muted">Map Phase</p>
         <h1 style="margin-top:0;">设备 {{ route.params.deviceId }}</h1>
-        <p class="muted">当前阶段提供坐标映射视图和最近一小时轨迹数据，为后续真实地图 SDK 接入保留接口层。</p>
+        <p class="muted">坐标映射视图 + 轨迹回放模式。真实地图 SDK 可通过 VITE_MAP_PROVIDER 配置接入。</p>
         <p v-if="errorText" style="color:#8f1f1f;">{{ errorText }}</p>
         <dl v-if="latestLocation" style="display:grid;grid-template-columns:max-content 1fr;gap:10px 14px;">
           <dt class="muted">纬度</dt>
-          <dd>{{ latestLocation.latitude }}</dd>
+          <dd>{{ replayPoint ? replayPoint.latitude : latestLocation.latitude }}</dd>
           <dt class="muted">经度</dt>
-          <dd>{{ latestLocation.longitude }}</dd>
+          <dd>{{ replayPoint ? replayPoint.longitude : latestLocation.longitude }}</dd>
           <dt class="muted">电量</dt>
-          <dd>{{ latestLocation.battery }}%</dd>
+          <dd>{{ (replayPoint?.battery ?? latestLocation.battery) }}%</dd>
           <dt class="muted">报警</dt>
           <dd>{{ latestLocation.alarm_type }}</dd>
           <dt class="muted">上报时间</dt>
-          <dd>{{ latestLocation.timestamp }}</dd>
+          <dd>{{ replayPoint ? replayPoint.timestamp : latestLocation.timestamp }}</dd>
         </dl>
         <div v-if="summary" style="margin-top:18px;padding-top:16px;border-top:1px solid var(--line);">
           <h3>轨迹摘要</h3>
@@ -192,26 +231,29 @@ onMounted(() => {
           </article>
         </div>
       </div>
-      <div class="panel" style="min-height: 480px; padding: 24px; display:grid; place-items:center; background:
-        linear-gradient(135deg, rgba(182, 84, 43, 0.12), rgba(80, 120, 110, 0.16)),
-        repeating-linear-gradient(45deg, transparent, transparent 16px, rgba(27, 25, 22, 0.04) 16px, rgba(27, 25, 22, 0.04) 18px);">
-        <div style="width:min(100%,520px);">
-          <h2 style="margin-top:0;">坐标映射视图</h2>
-          <svg viewBox="0 0 100 100" style="width:100%;border-radius:22px;background:rgba(255,252,247,0.5);border:1px solid var(--line);">
-            <line x1="0" y1="50" x2="100" y2="50" stroke="rgba(27,25,22,0.18)" />
-            <line x1="50" y1="0" x2="50" y2="100" stroke="rgba(27,25,22,0.18)" />
-            <polyline
-              v-if="history.length"
-              :points="history.map((item) => `${((Number(item.longitude) + 180) / 360) * 100},${((90 - Number(item.latitude)) / 180) * 100}`).join(' ')"
-              fill="none"
-              stroke="#7a2a10"
-              stroke-width="1.4"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            />
-            <circle :cx="plotPoint.x" :cy="plotPoint.y" r="2.6" fill="#b6542b" />
-          </svg>
-          <p class="muted">这不是正式地图，而是经纬度坐标投影视图，用来尽快验证轨迹链路和前端展示逻辑。</p>
+      <div class="panel" style="min-height: 480px; padding: 24px;">
+        <div style="width:100%;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+            <h2 style="margin:0;">
+              {{ showReplay ? '轨迹回放' : '实时位置' }}
+            </h2>
+            <button v-if="historyPoints.length" class="button-primary" type="button" @click="showReplay = !showReplay">
+              {{ showReplay ? '返回实时' : '回放轨迹' }}
+            </button>
+          </div>
+          <CoordinateMap
+            :latitude="latitude"
+            :longitude="longitude"
+            :history="displayHistory"
+            :fences="mapFences"
+          />
+          <PathReplayPlayer
+            v-if="showReplay && historyPoints.length"
+            :points="historyPoints"
+            :autoplay="false"
+            :speed="1"
+            @pointChange="handleReplayPointChange"
+          />
         </div>
       </div>
     </section>

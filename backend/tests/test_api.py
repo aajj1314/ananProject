@@ -2,14 +2,17 @@
 
 from datetime import datetime, timedelta, timezone
 
+import pytest
+from httpx import AsyncClient
 
-async def register_and_login(client):
+
+async def register_and_login(client, phone="13800138000", nickname="Guardian"):
     """Create a user and return an auth header."""
 
     register_payload = {
-        "phone": "13800138000",
+        "phone": phone,
         "password": "passw0rd",
-        "nickname": "Guardian",
+        "nickname": nickname,
     }
     register_response = await client.post("/api/v1/auth/register", json=register_payload)
     assert register_response.status_code == 201
@@ -23,7 +26,8 @@ async def register_and_login(client):
     return {"Authorization": f"Bearer {token}"}
 
 
-async def test_auth_and_device_flow(client):
+@pytest.mark.asyncio
+async def test_auth_and_device_flow(client: AsyncClient):
     """Ensure user registration, login, and device binding work."""
 
     headers = await register_and_login(client)
@@ -46,6 +50,117 @@ async def test_auth_and_device_flow(client):
     )
     assert update_response.status_code == 200
     assert update_response.json()["data"]["device_name"] == "Renamed Pair"
+
+
+@pytest.mark.asyncio
+async def test_auth_error_scenarios(client: AsyncClient):
+    """Test authentication error scenarios."""
+
+    # Test invalid phone format
+    bad_phone_response = await client.post(
+        "/api/v1/auth/register",
+        json={"phone": "123", "password": "passw0rd", "nickname": "Test"},
+    )
+    assert bad_phone_response.status_code == 422
+
+    # Test login with non-existent user
+    bad_login_response = await client.post(
+        "/api/v1/auth/login",
+        json={"phone": "13999999999", "password": "wrongpass"},
+    )
+    assert bad_login_response.status_code in (401, 404)
+
+    # Test invalid token
+    invalid_token_response = await client.get(
+        "/api/v1/device",
+        headers={"Authorization": "Bearer invalid-token"},
+    )
+    assert invalid_token_response.status_code == 401
+
+    # Test missing token
+    missing_token_response = await client.get("/api/v1/device")
+    assert missing_token_response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_user_profile_endpoint(client: AsyncClient):
+    """Test the user profile endpoint."""
+
+    headers = await register_and_login(client, phone="13800138001", nickname="ProfileTest")
+
+    profile_response = await client.get("/api/v1/auth/profile", headers=headers)
+    assert profile_response.status_code == 200
+    profile_data = profile_response.json()["data"]
+    assert profile_data["nickname"] == "ProfileTest"
+    assert profile_data["phone"] == "13800138001"
+    assert profile_data["role"] in ["user", "admin"]
+
+
+@pytest.mark.asyncio
+async def test_device_access_control(client: AsyncClient):
+    """Test that users can't access other users' devices."""
+
+    # User 1 creates a device
+    headers1 = await register_and_login(client, phone="13800138100", nickname="User1")
+    await client.post(
+        "/api/v1/device",
+        json={"device_id": "999888777666555", "device_name": "User1 Device"},
+        headers=headers1,
+    )
+
+    # User 2 tries to access User 1's device
+    headers2 = await register_and_login(client, phone="13800138200", nickname="User2")
+    get_response = await client.get(
+        "/api/v1/device/999888777666555",
+        headers=headers2,
+    )
+    # Should return 404 or 403, not 200
+    assert get_response.status_code in (403, 404)
+
+    # User 2 tries to update User 1's device
+    update_response = await client.put(
+        "/api/v1/device/999888777666555",
+        json={"device_name": "Hacked!"},
+        headers=headers2,
+    )
+    assert update_response.status_code in (403, 404)
+
+
+@pytest.mark.asyncio
+async def test_admin_endpoints_denied_for_regular_users(client: AsyncClient):
+    """Test that regular users can't access admin endpoints."""
+
+    headers = await register_and_login(client, phone="13800138300", nickname="RegularUser")
+
+    # Try to access admin stats
+    admin_response = await client.get("/api/v1/admin/stats", headers=headers)
+    assert admin_response.status_code == 403
+
+    # Try to list all users
+    users_response = await client.get("/api/v1/admin/users", headers=headers)
+    assert users_response.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_health_checks(client: AsyncClient):
+    """Test health check endpoints."""
+
+    # Basic health
+    health_response = await client.get("/health")
+    assert health_response.status_code == 200
+    assert health_response.json()["status"] == "ok"
+
+    # API health
+    api_health_response = await client.get("/api/v1/health")
+    assert api_health_response.status_code == 200
+
+    # Detailed health (requires auth but is public in our implementation)
+    detailed_response = await client.get("/api/v1/health/detailed")
+    assert detailed_response.status_code == 200
+
+    # Metrics
+    metrics_response = await client.get("/api/v1/health/metrics")
+    assert metrics_response.status_code == 200
 
 
 async def test_location_ingest_and_history(client):

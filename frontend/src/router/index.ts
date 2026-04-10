@@ -20,5 +20,10 @@ export const router = createRouter({
       component: () => import('@/views/MapView.vue'),
       props: true,
     },
+    {
+      path: '/admin',
+      component: () => import('@/views/AdminDashboard.vue'),
+      meta: { requiresAdmin: true },
+    },
   ],
 })

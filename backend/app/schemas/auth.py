@@ -1,5 +1,7 @@
 """Authentication schemas."""
 
+from datetime import datetime
+
 from pydantic import BaseModel, Field, field_validator
 
 
@@ -30,3 +32,13 @@ class TokenPayload(BaseModel):
 
     access_token: str
     token_type: str = "bearer"
+
+
+class UserProfile(BaseModel):
+    """User profile response."""
+
+    id: int
+    phone: str
+    nickname: str
+    role: str
+    created_at: datetime
