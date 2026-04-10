@@ -61,3 +61,9 @@ def conflict(detail: str | None = None) -> AppException:
     """Build a conflict exception."""
 
     return AppException(ErrorCode.DEVICE_ALREADY_BOUND, status.HTTP_409_CONFLICT, detail)
+
+
+def forbidden(detail: str | None = None) -> AppException:
+    """Build a forbidden exception."""
+
+    return AppException(ErrorCode.UNAUTHORIZED, status.HTTP_403_FORBIDDEN, detail)
