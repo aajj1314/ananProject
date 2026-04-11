@@ -1,9 +1,40 @@
+# Python
 __pycache__/
 *.pyc
-.DS_Store
-node_modules/
+*.pyo
+*.egg-info/
 dist/
+build/
 .venv/
+
+# Environment files (CRITICAL: prevent credential leakage)
 .env
-elderly_insole_dev.db
-test_elderly_insole.db
+.env.*
+!.env.example
+!.env.development.example
+!.env.production.example
+
+# Database files
+*.db
+*.sqlite3
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Node
+node_modules/
+
+# Logs
+*.log
+
+# Coverage
+htmlcov/
+.coverage
+coverage/

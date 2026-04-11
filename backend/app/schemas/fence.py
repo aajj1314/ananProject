@@ -2,43 +2,31 @@
 
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class FenceBase(BaseModel):
     """Shared electronic fence fields."""
 
     name: str = Field(min_length=1, max_length=100)
-    center_latitude: float
-    center_longitude: float
+    center_latitude: float = Field(ge=-90, le=90)
+    center_longitude: float = Field(ge=-180, le=180)
     radius_meters: float = Field(gt=0, le=100000)
     is_active: bool = True
-
-    @field_validator("center_latitude")
-    @classmethod
-    def validate_latitude(cls, value: float) -> float:
-        """Ensure latitude is valid."""
-
-        if not -90 <= value <= 90:
-            raise ValueError("Latitude must be between -90 and 90")
-        return value
-
-    @field_validator("center_longitude")
-    @classmethod
-    def validate_longitude(cls, value: float) -> float:
-        """Ensure longitude is valid."""
-
-        if not -180 <= value <= 180:
-            raise ValueError("Longitude must be between -180 and 180")
-        return value
 
 
 class FenceCreate(FenceBase):
     """Create fence payload."""
 
 
-class FenceUpdate(FenceBase):
-    """Update fence payload."""
+class FenceUpdate(BaseModel):
+    """Update fence payload - all fields optional for partial update."""
+
+    name: str | None = Field(default=None, min_length=1, max_length=100)
+    center_latitude: float | None = Field(default=None, ge=-90, le=90)
+    center_longitude: float | None = Field(default=None, ge=-180, le=180)
+    radius_meters: float | None = Field(default=None, gt=0, le=100000)
+    is_active: bool | None = None
 
 
 class FenceRead(FenceBase):

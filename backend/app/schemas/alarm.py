@@ -5,6 +5,15 @@ from datetime import datetime
 from pydantic import BaseModel, ConfigDict
 
 
+class AlarmLatestRead(BaseModel):
+    """Latest alarm state payload for a device."""
+
+    device_id: str
+    alarm_type: int
+    battery: int
+    timestamp: datetime
+
+
 class AlarmRead(BaseModel):
     """Alarm event payload."""
 

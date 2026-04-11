@@ -3,15 +3,18 @@
 import asyncio
 import time
 from datetime import datetime, timezone
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, status
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
+from app.models.user import User
 from app.utils.database import get_db_session
 from app.utils.metrics import get_metrics_registry
 from app.utils.response import success_response
+from app.utils.security import get_admin_user
 
 router = APIRouter(prefix="/health", tags=["health"])
 settings = get_settings()
@@ -25,10 +28,7 @@ async def health_check() -> dict:
     return success_response(
         {
             "status": "ok",
-            "app": settings.app_name,
-            "env": settings.app_env,
             "uptime_seconds": uptime,
-            "started_at": startup_time.isoformat(),
         }
     )
 
@@ -102,8 +102,12 @@ async def get_metrics(window_seconds: float = 60.0) -> dict:
     )
 
 
-@router.post("/metrics/reset", status_code=status.HTTP_204_NO_CONTENT)
-async def reset_metrics() -> None:
-    """Reset all metrics (for testing/debug)."""
+@router.post("/metrics/reset")
+async def reset_metrics(
+    _current_user: Annotated[User, Depends(get_admin_user)],
+) -> dict:
+    """Reset all metrics (admin only, for testing/debug)."""
+
     registry = get_metrics_registry()
     registry.reset()
+    return success_response(None, message="指标已重置")

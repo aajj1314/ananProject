@@ -1,7 +1,5 @@
 """Notification persistence service."""
 
-from datetime import datetime, timezone
-
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.alarm import NotificationRecord
@@ -30,7 +28,6 @@ class NotificationService:
             title=title or f"设备报警 {alarm_type}",
             content=content or f"设备 {device_id} 触发报警 {alarm_type}，当前电量 {battery}%",
             status="queued",
-            created_at=datetime.now(timezone.utc),
         )
         session.add(notification)
         await session.flush()

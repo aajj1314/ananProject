@@ -20,10 +20,13 @@ router = APIRouter(prefix="/location", tags=["location"])
 @router.post("/ingest", status_code=status.HTTP_201_CREATED)
 async def ingest_location(
     payload: DeviceTelemetryIn,
+    current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict:
-    """Receive telemetry from a device."""
+    """Receive telemetry from a device (requires authentication)."""
 
+    # Verify the device belongs to the current user (or user is admin)
+    device = await DeviceService.get_owned_device(payload.device_id, current_user, session)
     record = await LocationService.ingest_telemetry(payload, session)
     return success_response(LocationRead.model_validate(record).model_dump(), message="定位数据已接收")
 
@@ -46,13 +49,14 @@ async def get_location_history(
     device_id: str,
     start_time: datetime = Query(...),
     end_time: datetime = Query(...),
+    limit: int = Query(5000, ge=1, le=5000),
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict:
     """Get location history for a device and time range."""
 
     device = await DeviceService.get_owned_device(device_id, current_user, session)
-    records = await LocationService.get_history(device, start_time, end_time, current_user, session)
+    records = await LocationService.get_history(device, start_time, end_time, current_user, session, limit=limit)
     return success_response([LocationRead.model_validate(record).model_dump() for record in records])
 
 
@@ -64,9 +68,12 @@ async def get_location_history_summary(
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict:
-    """Get a compact history summary for a device and time range."""
+    """Get a compact history summary for a device and time range.
+
+    Uses DB aggregation instead of loading all records, significantly
+    reducing memory usage and response time for large datasets.
+    """
 
     device = await DeviceService.get_owned_device(device_id, current_user, session)
-    records = await LocationService.get_history(device, start_time, end_time, current_user, session)
-    summary = LocationService.build_history_summary(device, records)
+    summary = await LocationService.get_history_summary(device, start_time, end_time, current_user, session)
     return success_response(summary.model_dump())

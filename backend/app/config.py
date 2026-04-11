@@ -1,5 +1,6 @@
 """Application configuration."""
 
+import warnings
 from functools import lru_cache
 
 from pydantic import Field
@@ -38,6 +39,27 @@ class Settings(BaseSettings):
     wechat_app_id: str | None = Field(default=None, alias="WECHAT_APP_ID")
     wechat_app_secret: str | None = Field(default=None, alias="WECHAT_APP_SECRET")
     wechat_template_id: str | None = Field(default=None, alias="WECHAT_TEMPLATE_ID")
+    cors_origins: list[str] = Field(
+        default=["http://localhost:5173", "http://localhost:3000", "http://127.0.0.1:5173"],
+        alias="CORS_ORIGINS",
+    )
+    admin_phone: str | None = Field(default=None, alias="ADMIN_PHONE")
+    admin_password: str | None = Field(default=None, alias="ADMIN_PASSWORD")
+
+    def model_post_init(self, __context) -> None:
+        """Validate security-critical settings after initialization."""
+        if self.app_env == "production":
+            if self.jwt_secret in ("dev-secret-key", "change-me", "REPLACE_WITH_A_SECURE_RANDOM_KEY"):
+                warnings.warn(
+                    "SECURITY WARNING: JWT_SECRET is using a default/placeholder value in production! "
+                    "Generate a secure key with: python -c \"import secrets; print(secrets.token_hex(32))\"",
+                    stacklevel=2,
+                )
+            if self.debug:
+                warnings.warn(
+                    "SECURITY WARNING: DEBUG mode is enabled in production environment!",
+                    stacklevel=2,
+                )
 
 
 @lru_cache(maxsize=1)

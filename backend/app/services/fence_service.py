@@ -11,7 +11,7 @@ from app.models.device import Device
 from app.models.fence import ElectronicFence
 from app.schemas.fence import FenceAlert, FenceCreate, FenceEvaluation, FenceUpdate
 from app.utils.cache import cache_delete
-from app.utils.errors import not_found
+from app.utils.errors import fence_not_found
 
 
 class FenceService:
@@ -91,7 +91,7 @@ class FenceService:
         )
         fence = result.scalar_one_or_none()
         if fence is None:
-            raise not_found("Fence does not exist")
+            raise fence_not_found("围栏不存在")
         return fence
 
     @staticmethod
@@ -100,17 +100,22 @@ class FenceService:
         payload: FenceUpdate,
         session: AsyncSession,
     ) -> ElectronicFence:
-        """Update fence fields."""
+        """Update fence fields - supports partial updates."""
 
         try:
-            fence.name = payload.name
-            fence.center_latitude = payload.center_latitude
-            fence.center_longitude = payload.center_longitude
-            fence.radius_meters = payload.radius_meters
-            fence.is_active = payload.is_active
-            if not fence.is_active:
-                fence.last_status = "unknown"
-                fence.last_transition_at = None
+            if payload.name is not None:
+                fence.name = payload.name
+            if payload.center_latitude is not None:
+                fence.center_latitude = payload.center_latitude
+            if payload.center_longitude is not None:
+                fence.center_longitude = payload.center_longitude
+            if payload.radius_meters is not None:
+                fence.radius_meters = payload.radius_meters
+            if payload.is_active is not None:
+                fence.is_active = payload.is_active
+                if not fence.is_active:
+                    fence.last_status = "unknown"
+                    fence.last_transition_at = None
             await session.commit()
             await session.refresh(fence)
             await cache_delete(FenceService._cache_key(fence.device_id))

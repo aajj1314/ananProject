@@ -2,23 +2,14 @@
 
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class DeviceCreate(BaseModel):
     """Bind device request."""
 
-    device_id: str = Field(min_length=15, max_length=15)
+    device_id: str = Field(min_length=15, max_length=15, pattern=r"^\d{15}$")
     device_name: str = Field(min_length=1, max_length=100)
-
-    @field_validator("device_id")
-    @classmethod
-    def validate_device_id(cls, value: str) -> str:
-        """Ensure IMEI-style device identifier."""
-
-        if not value.isdigit():
-            raise ValueError("Device ID must contain exactly 15 digits")
-        return value
 
 
 class DeviceUpdate(BaseModel):

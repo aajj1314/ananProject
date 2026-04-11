@@ -5,16 +5,16 @@ from datetime import datetime
 from sqlalchemy import DateTime, Float, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.models.base import Base
+from app.models.base import Base, TimestampMixin
 
 
-class Device(Base):
+class Device(TimestampMixin, Base):
     """Tracked insole device."""
 
     __tablename__ = "devices"
 
     device_id: Mapped[str] = mapped_column(String(15), primary_key=True, index=True)
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     device_name: Mapped[str] = mapped_column(String(100))
     battery: Mapped[int] = mapped_column(Integer, default=100)
     last_latitude: Mapped[float | None] = mapped_column(Float, nullable=True)
@@ -22,3 +22,7 @@ class Device(Base):
     last_updated: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     user = relationship("User", back_populates="devices")
+    locations = relationship("LocationRecord", back_populates="device", cascade="all, delete-orphan")
+    fences = relationship("ElectronicFence", back_populates="device", cascade="all, delete-orphan")
+    alarms = relationship("AlarmRecord", back_populates="device", cascade="all, delete-orphan")
+    notifications = relationship("NotificationRecord", back_populates="device", cascade="all, delete-orphan")

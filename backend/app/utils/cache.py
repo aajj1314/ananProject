@@ -1,6 +1,7 @@
 """Redis-backed cache helpers with in-memory fallback."""
 
 import json
+import time
 from collections.abc import AsyncGenerator
 
 from redis import asyncio as redis
@@ -9,7 +10,9 @@ from app.config import get_settings
 
 
 settings = get_settings()
-_memory_cache: dict[str, str] = {}
+
+# In-memory cache stores (value, expire_at) tuples for TTL support
+_memory_cache: dict[str, tuple[str, float]] = {}
 _redis_client: redis.Redis | None = None
 
 
@@ -29,6 +32,14 @@ async def get_redis_client() -> redis.Redis | None:
         return None
 
 
+def _cleanup_expired_memory_cache() -> None:
+    """Remove expired entries from the in-memory cache to prevent memory leaks."""
+    now = time.monotonic()
+    expired_keys = [k for k, (_, expire_at) in _memory_cache.items() if expire_at > 0 and now > expire_at]
+    for key in expired_keys:
+        del _memory_cache[key]
+
+
 async def cache_get(key: str) -> dict | list | None:
     """Read JSON data from cache."""
 
@@ -36,7 +47,18 @@ async def cache_get(key: str) -> dict | list | None:
     if client is not None:
         raw_value = await client.get(key)
     else:
-        raw_value = _memory_cache.get(key)
+        # Periodically clean up expired entries from memory cache
+        _cleanup_expired_memory_cache()
+        entry = _memory_cache.get(key)
+        if entry is not None:
+            raw_value, expire_at = entry
+            if expire_at > 0 and time.monotonic() > expire_at:
+                del _memory_cache[key]
+                raw_value = None
+            else:
+                raw_value = raw_value
+        else:
+            raw_value = None
     if not raw_value:
         return None
     return json.loads(raw_value)
@@ -51,7 +73,9 @@ async def cache_set(key: str, value: dict | list, ttl_seconds: int | None = None
     if client is not None:
         await client.set(key, payload, ex=ttl)
         return
-    _memory_cache[key] = payload
+    # Store with expiration timestamp for in-memory fallback
+    expire_at = time.monotonic() + ttl if ttl > 0 else 0
+    _memory_cache[key] = (payload, expire_at)
 
 
 async def cache_delete(key: str) -> None:

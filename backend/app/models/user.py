@@ -17,4 +17,4 @@ class User(TimestampMixin, Base):
     nickname: Mapped[str] = mapped_column(String(50))
     role: Mapped[str] = mapped_column(String(20), default="user")
 
-    devices = relationship("Device", back_populates="user")
+    devices = relationship("Device", back_populates="user", cascade="all, delete-orphan")

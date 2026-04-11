@@ -42,3 +42,16 @@ class UserProfile(BaseModel):
     nickname: str
     role: str
     created_at: datetime
+
+
+class UserUpdate(BaseModel):
+    """Update user profile request body."""
+
+    nickname: str | None = Field(default=None, min_length=1, max_length=50)
+
+
+class PasswordReset(BaseModel):
+    """Reset password request body."""
+
+    old_password: str = Field(min_length=6, max_length=128)
+    new_password: str = Field(min_length=6, max_length=128)

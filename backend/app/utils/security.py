@@ -24,7 +24,7 @@ class UserRole(str, Enum):
     ADMIN = "admin"
 
 
-pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
+pwd_context = CryptContext(schemes=["bcrypt", "pbkdf2_sha256"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
 settings = get_settings()
 
@@ -83,10 +83,12 @@ def require_role(*required_roles: UserRole):
         if not user_role:
             user_role = UserRole.USER
 
-        if user_role not in required_roles and UserRole.ADMIN not in required_roles:
-            if UserRole.ADMIN == user_role:
-                return current_user
-            raise forbidden(f"Requires one of roles: {', '.join(required_roles)}")
+        # Admin users can always pass role checks
+        if user_role == UserRole.ADMIN:
+            return current_user
+
+        if user_role not in required_roles:
+            raise forbidden(f"Requires one of roles: {', '.join(r.value for r in required_roles)}")
 
         return current_user
 
