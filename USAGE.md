@@ -119,7 +119,7 @@ cp .env.example .env
 npm run dev
 ```
 
-前端将在 http://localhost:5173 启动。
+前端将在 http://localhost:8081 启动。
 
 ### 使用启动脚本（推荐）
 
@@ -497,7 +497,7 @@ docker-compose up -d
 ```
 
 服务将启动后访问：
-- 前端：http://localhost:8080
+- 前端：http://localhost:8081
 - 后端：http://localhost:8000
 - API 文档：http://localhost:8000/docs
 

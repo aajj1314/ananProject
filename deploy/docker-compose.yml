@@ -21,7 +21,7 @@ services:
       - RATE_LIMIT_REQUESTS=60
       - RATE_LIMIT_WINDOW_SECONDS=60
       - CACHE_TTL_SECONDS=120
-      - NOTIFICATION_CHANNELS=in_app
+      - NOTIFICATION_CHANNELS=["in_app"]
     ports:
       - "8000:8000"
     volumes:
@@ -38,7 +38,7 @@ services:
     image: elderly-care-frontend:latest
     container_name: elderly-care-frontend
     ports:
-      - "8080:8080"
+      - "8081:80"
     depends_on:
       - backend
     restart: unless-stopped

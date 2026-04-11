@@ -26,7 +26,7 @@
 
 ## 快速开始
 
-### 使用启动脚本（推荐）
+### 使用启动脚本（推荐，Linux 环境）
 
 ```bash
 # 启动后端
@@ -38,27 +38,53 @@
 
 ### 手动启动
 
-#### 后端
+#### 后端（Linux/Windows 环境）
 
 ```bash
 cd backend
+
+# 1. 配置环境
+# Linux
 cp ../.env.development.example .env
+# Windows
+copy ..\.env.development.example .env
+
+# 2. 安装依赖
 pip install -r requirements.txt
+
+# 3. 启动服务
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 后端将在 http://localhost:8000 运行，API 文档在 http://localhost:8000/docs
 
-#### 前端
+#### 前端（Linux/Windows 环境）
 
 ```bash
 cd frontend
-cp .env.example .env  # 可选
+
+# 1. 配置环境（可选）
+# Linux
+cp .env.example .env
+# Windows
+copy .env.example .env
+
+# 2. 安装依赖
 npm install
+
+# 3. 启动开发服务器
 npm run dev
 ```
 
-前端将在 http://localhost:5173 运行
+前端将在 http://localhost:8081 运行
+
+## 注意事项（Windows 环境）
+
+1. **Python 3.13 兼容性**：项目在 Python 3.13 环境下需要使用较新版本的依赖包。
+2. **环境变量配置**：在 Windows 环境下，`.env` 文件中的 `NOTIFICATION_CHANNELS` 字段需要使用 JSON 格式。
+3. **依赖安装**：在 Windows 环境下安装依赖时，可能会遇到 pydantic-core 构建问题，建议使用预编译的二进制包。
+
+详细说明请参考 [快速启动指南](./QUICKSTART.md)。
 
 ### Docker 部署
 
@@ -105,8 +131,9 @@ ananProject/
 
 ### 后端
 - FastAPI 0.110.0
-- SQLAlchemy 2.0 (异步)
-- Pydantic 2.6
+- SQLAlchemy 2.0.49 (异步)
+- Pydantic 2.12.5
+- Pydantic Settings 2.13.1
 - JWT 认证
 - Redis 缓存（可选）
 
@@ -115,6 +142,10 @@ ananProject/
 - Vite 5.2
 - Pinia 2.1
 - Vue Router 4.3
+
+### 容器化
+- Docker
+- Docker Compose
 
 ## 本地开发
 

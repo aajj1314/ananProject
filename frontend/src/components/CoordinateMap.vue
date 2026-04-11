@@ -1,10 +1,19 @@
 <script setup lang="ts">
 import { computed, watch } from 'vue'
 
+/**
+ * 坐标投影视图组件
+ * 用于在没有真实地图SDK的情况下，通过SVG显示设备位置和历史轨迹
+ */
+
 interface Props {
+  /** 设备当前纬度 */
   latitude: number
+  /** 设备当前经度 */
   longitude: number
+  /** 历史轨迹点数组 */
   history?: Array<{ latitude: number; longitude: number }>
+  /** 电子围栏数组 */
   fences?: Array<{
     center_latitude: number
     center_longitude: number

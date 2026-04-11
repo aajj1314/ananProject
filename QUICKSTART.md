@@ -6,7 +6,7 @@
 
 ## 快速启动
 
-### 方式一：使用启动脚本（推荐）
+### 方式一：使用启动脚本（推荐，Linux 环境）
 
 ```bash
 # 启动后端
@@ -18,13 +18,16 @@
 
 ### 方式二：手动启动
 
-#### 后端启动
+#### 后端启动（Linux/Windows 环境）
 
 ```bash
 cd backend
 
 # 1. 配置环境（复制示例配置）
+# Linux
 cp ../.env.development.example .env
+# Windows
+copy ..\.env.development.example .env
 
 # 2. 安装依赖
 pip install -r requirements.txt
@@ -35,13 +38,16 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
 后端将在 http://localhost:8000 运行，API 文档在 http://localhost:8000/docs
 
-#### 前端启动
+#### 前端启动（Linux/Windows 环境）
 
 ```bash
 cd frontend
 
 # 1. 配置环境（可选）
+# Linux
 cp .env.example .env
+# Windows
+copy .env.example .env
 
 # 2. 安装依赖
 npm install
@@ -50,7 +56,47 @@ npm install
 npm run dev
 ```
 
-前端将在 http://localhost:5173 运行
+前端将在 http://localhost:8081 运行
+
+## 注意事项（Windows 环境）
+
+1. **Python 3.13 兼容性**：项目在 Python 3.13 环境下需要使用较新版本的依赖包，包括：
+   - pydantic >= 2.5.0
+   - pydantic-settings >= 2.1.0
+   - sqlalchemy >= 2.0.49
+
+2. **环境变量配置**：在 Windows 环境下，`.env` 文件中的 `NOTIFICATION_CHANNELS` 字段需要使用 JSON 格式，例如：
+   ```
+   NOTIFICATION_CHANNELS=["in_app"]
+   ```
+
+3. **依赖安装**：在 Windows 环境下安装依赖时，可能会遇到 pydantic-core 构建问题。建议使用预编译的二进制包：
+   ```bash
+   pip install pydantic pydantic-settings --only-binary :all:
+   ```
+
+## Docker 运行
+
+### 前提条件
+- 安装 Docker 和 Docker Compose
+
+### 启动服务
+
+```bash
+cd deploy
+docker-compose up -d
+```
+
+### 访问服务
+- 前端服务：http://localhost:8081
+- 后端 API 文档：http://localhost:8000/docs
+
+### 停止服务
+
+```bash
+cd deploy
+docker-compose down
+```
 
 ## 功能清单
 

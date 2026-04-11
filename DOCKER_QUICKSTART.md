@@ -19,7 +19,7 @@ docker-compose up -d
 
 | 服务 | 地址 |
 |------|------|
-| 🌐 前端 | http://localhost:8080 |
+| 🌐 前端 | http://localhost:8081 |
 | 🔧 后端 API | http://localhost:8000 |
 | 📚 API 文档 | http://localhost:8000/docs |
 

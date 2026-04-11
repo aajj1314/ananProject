@@ -14,5 +14,5 @@ fi
 echo "Installing dependencies..."
 npm install
 
-echo "Starting frontend dev server on http://localhost:5173"
+echo "Starting frontend dev server on http://localhost:8081"
 npm run dev

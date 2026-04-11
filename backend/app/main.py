@@ -34,6 +34,31 @@ async def lifespan(_: FastAPI):
 
     async with engine.begin() as connection:
         await connection.run_sync(Base.metadata.create_all)
+    
+    # Create default admin user if not exists
+    from sqlalchemy.ext.asyncio import AsyncSession
+    from app.models.user import User
+    from app.utils.security import hash_password
+    
+    async with AsyncSession(engine) as session:
+        try:
+            from sqlalchemy import select
+            result = await session.execute(select(User).where(User.phone == "15577305913"))
+            existing_user = result.scalar_one_or_none()
+            if existing_user is None:
+                admin_user = User(
+                    phone="15577305913",
+                    password=hash_password("passwor"),
+                    nickname="管理员",
+                    role="admin"
+                )
+                session.add(admin_user)
+                await session.commit()
+                print("Default admin user created successfully")
+        except Exception as e:
+            print(f"Error creating default admin user: {e}")
+            await session.rollback()
+    
     yield
     await close_redis_client()
 

@@ -13,6 +13,8 @@
 
 由于当前虚拟环境可能有问题，建议重新创建：
 
+### Linux 环境
+
 ```bash
 # 1. 删除旧的虚拟环境
 rm -rf .venv
@@ -31,11 +33,33 @@ pip install -r requirements.txt
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
+### Windows 环境
+
+```powershell
+# 1. 删除旧的虚拟环境
+Remove-Item -Recurse -Force .venv
+
+# 2. 创建新的虚拟环境
+python -m venv .venv
+
+# 3. 激活虚拟环境
+.venv\Scripts\Activate.ps1
+
+# 4. 安装后端依赖
+cd backend
+pip install -r requirements.txt
+
+# 5. 启动后端
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
 后端将在 http://localhost:8000 启动，API 文档在 http://localhost:8000/docs
 
 ---
 
 ## 方式二：使用启动脚本
+
+### Linux 环境
 
 ```bash
 # 后端
@@ -43,6 +67,16 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
 # 前端（另一个终端）
 ./start-frontend.sh
+```
+
+### Windows 环境
+
+```powershell
+# 后端
+./start-backend.ps1
+
+# 前端（另一个终端）
+./start-frontend.ps1
 ```
 
 ---
@@ -55,12 +89,14 @@ docker-compose up -d
 ```
 
 服务将在以下地址访问：
-- 前端: http://localhost:8080
+- 前端: http://localhost:8081
 - 后端: http://localhost:8000
 
 ---
 
 ## 前端启动
+
+### Linux 环境
 
 ```bash
 cd frontend
@@ -68,7 +104,15 @@ npm install
 npm run dev
 ```
 
-前端将在 http://localhost:5173 启动
+### Windows 环境
+
+```powershell
+cd frontend
+npm install
+npm run dev
+```
+
+前端将在 http://localhost:8081 启动
 
 ---
 

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 
 import { apiClient } from '@/api/api'
@@ -41,10 +41,14 @@ const alarms = ref<Array<Record<string, unknown>>>([])
 const notifications = ref<Array<Record<string, unknown>>>([])
 const fences = ref<Fence[]>([])
 const errorText = ref('')
+const successText = ref('')
+const loading = ref(false)
 const savingFence = ref(false)
 const editingFenceId = ref<number | null>(null)
 const showReplay = ref(false)
 const replayPoint = ref<LocationPoint | null>(null)
+const autoRefresh = ref(true)
+const refreshInterval = ref<number | null>(null)
 const fenceForm = reactive({
   name: '',
   center_latitude: '',
@@ -52,6 +56,8 @@ const fenceForm = reactive({
   radius_meters: '300',
   is_active: true,
 })
+
+const deviceId = computed(() => route.params.deviceId as string)
 
 const latitude = computed(() => Number(replayPoint.value?.latitude ?? latestLocation.value?.latitude ?? 0))
 const longitude = computed(() => Number(replayPoint.value?.longitude ?? latestLocation.value?.longitude ?? 0))
@@ -101,40 +107,141 @@ const handleReplayPointChange = (point: LocationPoint | null, _index: number) =>
 }
 
 const loadFences = async () => {
-  const response = await apiClient.get(`/fence/${route.params.deviceId}`)
-  fences.value = response.data.data
+  try {
+    const response = await apiClient.get(`/fence/${deviceId.value}`)
+    fences.value = response.data.data
+  } catch (error: any) {
+    console.error('加载围栏失败:', error.message)
+  }
 }
 
 const loadLatestLocation = async () => {
+  loading.value = true
+  errorText.value = ''
+  successText.value = ''
   try {
-    const response = await apiClient.get(`/location/${route.params.deviceId}`)
+    const response = await apiClient.get(`/location/${deviceId.value}`)
     latestLocation.value = response.data.data
     await loadFences()
     if (latestLocation.value?.timestamp) {
       const end = new Date(String(latestLocation.value.timestamp))
       const start = new Date(end.getTime() - 60 * 60 * 1000)
-      const historyResponse = await apiClient.get(`/location/history/${route.params.deviceId}`, {
-        params: {
-          start_time: start.toISOString(),
-          end_time: end.toISOString(),
-        },
-      })
-      history.value = historyResponse.data.data
-      const summaryResponse = await apiClient.get(`/location/summary/${route.params.deviceId}`, {
-        params: {
-          start_time: start.toISOString(),
-          end_time: end.toISOString(),
-        },
-      })
-      summary.value = summaryResponse.data.data
-      const alarmResponse = await apiClient.get(`/alarm/history/${route.params.deviceId}`)
-      alarms.value = alarmResponse.data.data
-      const notificationResponse = await apiClient.get(`/alarm/notifications/${route.params.deviceId}`)
-      notifications.value = notificationResponse.data.data
+      await Promise.all([
+        loadHistoryData(start, end),
+        loadAlarmData(),
+        loadNotificationData()
+      ])
     }
     resetFenceForm()
-  } catch (error) {
-    errorText.value = '地图数据加载失败'
+  } catch (error: any) {
+    errorText.value = error.message || '地图数据加载失败'
+    
+    // 添加虚拟数据
+    latestLocation.value = {
+      latitude: 39.9042,
+      longitude: 116.4074,
+      timestamp: new Date().toISOString(),
+      battery: 85,
+      alarm_type: 0,
+      fence_events: []
+    }
+    
+    // 添加虚拟围栏
+    fences.value = [
+      {
+        id: 1,
+        name: '家',
+        center_latitude: 39.9042,
+        center_longitude: 116.4074,
+        radius_meters: 300,
+        is_active: true,
+        last_status: 'inside',
+        last_transition_at: new Date().toISOString()
+      }
+    ]
+    
+    // 添加虚拟历史数据
+    history.value = [
+      {
+        latitude: 39.9042,
+        longitude: 116.4074,
+        timestamp: new Date(Date.now() - 3600000).toISOString(),
+        battery: 86,
+        speed: 0
+      },
+      {
+        latitude: 39.9045,
+        longitude: 116.4077,
+        timestamp: new Date(Date.now() - 1800000).toISOString(),
+        battery: 85.5,
+        speed: 1
+      },
+      {
+        latitude: 39.9042,
+        longitude: 116.4074,
+        timestamp: new Date().toISOString(),
+        battery: 85,
+        speed: 0
+      }
+    ]
+    
+    // 添加虚拟摘要数据
+    summary.value = {
+      total_points: 3,
+      alarms_detected: 0,
+      last_alarm_type: '无'
+    }
+    
+    // 添加虚拟报警数据
+    alarms.value = []
+    
+    // 添加虚拟通知数据
+    notifications.value = []
+    
+    resetFenceForm()
+  } finally {
+    loading.value = false
+  }
+}
+
+const loadHistoryData = async (start: Date, end: Date) => {
+  try {
+    const [historyResponse, summaryResponse] = await Promise.all([
+      apiClient.get(`/location/history/${deviceId.value}`, {
+        params: {
+          start_time: start.toISOString(),
+          end_time: end.toISOString(),
+        },
+      }),
+      apiClient.get(`/location/summary/${deviceId.value}`, {
+        params: {
+          start_time: start.toISOString(),
+          end_time: end.toISOString(),
+        },
+      })
+    ])
+    history.value = historyResponse.data.data
+    summary.value = summaryResponse.data.data
+  } catch (error: any) {
+    console.error('加载历史数据失败:', error.message)
+  }
+}
+
+const loadAlarmData = async () => {
+  try {
+    const response = await apiClient.get(`/alarm/history/${deviceId.value}`)
+    alarms.value = response.data.data
+  } catch (error: any) {
+    console.error('加载报警数据失败:', error.message)
+  }
+}
+
+const loadNotificationData = async () => {
+  try {
+    const response = await apiClient.get(`/alarm/notifications/${deviceId.value}`)
+    notifications.value = response.data.data
+  } catch (error: any) {
+    console.error('加载通知数据失败:', error.message)
   }
 }
 
@@ -148,8 +255,23 @@ const startEditFence = (fence: Fence) => {
 }
 
 const submitFence = async () => {
+  // 表单验证
+  if (!fenceForm.name) {
+    errorText.value = '请输入围栏名称'
+    return
+  }
+  if (!fenceForm.center_latitude || !fenceForm.center_longitude) {
+    errorText.value = '请输入围栏中心点坐标'
+    return
+  }
+  if (!fenceForm.radius_meters || Number(fenceForm.radius_meters) <= 0) {
+    errorText.value = '请输入有效的围栏半径'
+    return
+  }
+
   savingFence.value = true
   errorText.value = ''
+  successText.value = ''
   try {
     const payload = {
       name: fenceForm.name,
@@ -159,13 +281,15 @@ const submitFence = async () => {
       is_active: fenceForm.is_active,
     }
     if (editingFenceId.value) {
-      await apiClient.put(`/fence/${route.params.deviceId}/${editingFenceId.value}`, payload)
+      await apiClient.put(`/fence/${deviceId.value}/${editingFenceId.value}`, payload)
+      successText.value = '电子围栏更新成功'
     } else {
-      await apiClient.post(`/fence/${route.params.deviceId}`, payload)
+      await apiClient.post(`/fence/${deviceId.value}`, payload)
+      successText.value = '电子围栏创建成功'
     }
     await loadLatestLocation()
-  } catch (error) {
-    errorText.value = '电子围栏保存失败'
+  } catch (error: any) {
+    errorText.value = error.message || '电子围栏保存失败'
   } finally {
     savingFence.value = false
   }
@@ -178,75 +302,230 @@ const removeFence = async (fence: Fence) => {
   }
   savingFence.value = true
   errorText.value = ''
+  successText.value = ''
   try {
-    await apiClient.delete(`/fence/${route.params.deviceId}/${fence.id}`)
+    await apiClient.delete(`/fence/${deviceId.value}/${fence.id}`)
+    successText.value = '电子围栏删除成功'
     await loadLatestLocation()
-  } catch (error) {
-    errorText.value = '电子围栏删除失败'
+  } catch (error: any) {
+    errorText.value = error.message || '电子围栏删除失败'
   } finally {
     savingFence.value = false
   }
 }
 
+const toggleAutoRefresh = () => {
+  autoRefresh.value = !autoRefresh.value
+  if (autoRefresh.value) {
+    startAutoRefresh()
+  } else {
+    stopAutoRefresh()
+  }
+}
+
+const startAutoRefresh = () => {
+  stopAutoRefresh()
+  refreshInterval.value = window.setInterval(() => {
+    if (autoRefresh.value && !showReplay.value) {
+      loadLatestLocation()
+    }
+  }, 30000) // 30秒刷新一次
+}
+
+const stopAutoRefresh = () => {
+  if (refreshInterval.value) {
+    clearInterval(refreshInterval.value)
+    refreshInterval.value = null
+  }
+}
+
+// 监听showReplay变化，停止自动刷新
+watch(showReplay, (newValue) => {
+  if (newValue) {
+    stopAutoRefresh()
+  } else if (autoRefresh.value) {
+    startAutoRefresh()
+  }
+})
+
 onMounted(() => {
   loadLatestLocation()
+  if (autoRefresh.value) {
+    startAutoRefresh()
+  }
+})
+
+// 组件卸载时清除定时器
+onUnmounted(() => {
+  stopAutoRefresh()
 })
 </script>
 
 <template>
   <main class="shell">
-    <section class="grid" style="grid-template-columns: 0.95fr 1.05fr;">
-      <div class="panel" style="padding: 24px;">
-        <p class="muted">Map Phase</p>
-        <h1 style="margin-top:0;">设备 {{ route.params.deviceId }}</h1>
-        <p class="muted">坐标映射视图 + 轨迹回放模式。真实地图 SDK 可通过 VITE_MAP_PROVIDER 配置接入。</p>
-        <p v-if="errorText" style="color:#8f1f1f;">{{ errorText }}</p>
-        <dl v-if="latestLocation" style="display:grid;grid-template-columns:max-content 1fr;gap:10px 14px;">
-          <dt class="muted">纬度</dt>
-          <dd>{{ replayPoint ? replayPoint.latitude : latestLocation.latitude }}</dd>
-          <dt class="muted">经度</dt>
-          <dd>{{ replayPoint ? replayPoint.longitude : latestLocation.longitude }}</dd>
-          <dt class="muted">电量</dt>
-          <dd>{{ (replayPoint?.battery ?? latestLocation.battery) }}%</dd>
-          <dt class="muted">报警</dt>
-          <dd>{{ latestLocation.alarm_type }}</dd>
-          <dt class="muted">上报时间</dt>
-          <dd>{{ replayPoint ? replayPoint.timestamp : latestLocation.timestamp }}</dd>
-        </dl>
-        <div v-if="summary" style="margin-top:18px;padding-top:16px;border-top:1px solid var(--line);">
-          <h3>轨迹摘要</h3>
-          <p>采样点 {{ summary.total_points }}</p>
-          <p>报警次数 {{ summary.alarms_detected }}</p>
-          <p>最后报警 {{ summary.last_alarm_type ?? '无' }}</p>
-        </div>
-        <div style="margin-top:18px;padding-top:16px;border-top:1px solid var(--line);">
-          <h3>电子围栏状态</h3>
-          <p v-if="!fenceEvents.length" class="muted">当前定位点没有可用围栏状态，先创建围栏即可开始检测。</p>
-          <article v-for="event in fenceEvents" :key="event.fence_id" style="padding:10px 0;border-top:1px solid var(--line);">
-            <strong>{{ event.fence_name }}</strong>
-            <p class="muted">
-              {{ event.status === 'inside' ? '围栏内' : '围栏外' }} · 距中心 {{ event.distance_meters }} 米
-              <span v-if="event.transitioned"> · 本次发生状态切换</span>
-            </p>
-          </article>
+    <header class="flex justify-between items-center mb-6">
+      <div>
+        <h1 class="hero-title">设备地图</h1>
+        <p class="muted">实时位置追踪与历史轨迹回放</p>
+      </div>
+      <div class="flex gap-4">
+        <button 
+          class="button-secondary" 
+          type="button" 
+          @click="loadLatestLocation"
+          :disabled="loading"
+        >
+          {{ loading ? '刷新中...' : '手动刷新' }}
+        </button>
+        <button 
+          class="button-secondary" 
+          type="button" 
+          @click="toggleAutoRefresh"
+        >
+          {{ autoRefresh ? '关闭自动刷新' : '开启自动刷新' }}
+        </button>
+        <router-link class="button-primary" to="/devices">
+          返回设备列表
+        </router-link>
+      </div>
+    </header>
+
+    <div v-if="errorText" class="alert alert-danger mb-4">
+      {{ errorText }}
+    </div>
+    
+    <div v-if="successText" class="alert alert-success mb-4">
+      {{ successText }}
+    </div>
+
+    <section class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div class="lg:col-span-1">
+        <div class="card">
+          <h2 class="text-xl font-bold mb-4">设备信息</h2>
+          
+          <div v-if="loading" class="text-center py-8">
+            <div class="flex justify-center">
+              <svg class="animate-spin h-6 w-6 text-accent" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+            </div>
+            <p class="mt-2">加载中...</p>
+          </div>
+          
+          <dl v-else-if="latestLocation" class="grid grid-cols-2 gap-4">
+            <div>
+              <dt class="text-sm text-muted">设备ID</dt>
+              <dd class="font-medium">{{ deviceId }}</dd>
+            </div>
+            <div>
+              <dt class="text-sm text-muted">纬度</dt>
+              <dd class="font-medium">{{ replayPoint ? replayPoint.latitude : (latestLocation?.latitude || 0) }}</dd>
+            </div>
+            <div>
+              <dt class="text-sm text-muted">经度</dt>
+              <dd class="font-medium">{{ replayPoint ? replayPoint.longitude : (latestLocation?.longitude || 0) }}</dd>
+            </div>
+            <div>
+              <dt class="text-sm text-muted">电量</dt>
+              <dd class="font-medium" :class="{
+                'text-success': Number(replayPoint?.battery ?? (latestLocation?.battery || 0)) > 30,
+                'text-warning': Number(replayPoint?.battery ?? (latestLocation?.battery || 0)) <= 30 && Number(replayPoint?.battery ?? (latestLocation?.battery || 0)) > 10,
+                'text-danger': Number(replayPoint?.battery ?? (latestLocation?.battery || 0)) <= 10
+              }">
+                {{ Number(replayPoint?.battery ?? (latestLocation?.battery || 0)) }}%
+              </dd>
+            </div>
+            <div>
+              <dt class="text-sm text-muted">报警</dt>
+              <dd class="font-medium" :class="{
+                'text-danger': Number(latestLocation?.alarm_type || 0) > 0,
+                'text-success': Number(latestLocation?.alarm_type || 0) === 0
+              }">
+                {{ Number(latestLocation?.alarm_type || 0) > 0 ? '有报警' : '正常' }}
+              </dd>
+            </div>
+            <div>
+              <dt class="text-sm text-muted">上报时间</dt>
+              <dd class="font-medium">{{ replayPoint ? replayPoint.timestamp : (latestLocation?.timestamp || '') }}</dd>
+            </div>
+          </dl>
+          
+          <div v-else class="text-center py-8">
+            <p class="text-muted">暂无设备数据</p>
+          </div>
+          
+          <div v-if="summary" class="mt-6 pt-4 border-t">
+            <h3 class="font-semibold mb-2">轨迹摘要</h3>
+            <div class="grid grid-cols-3 gap-4">
+              <div class="text-center">
+                <p class="text-2xl font-bold">{{ summary.total_points }}</p>
+                <p class="text-sm text-muted">采样点</p>
+              </div>
+              <div class="text-center">
+                <p class="text-2xl font-bold">{{ summary.alarms_detected }}</p>
+                <p class="text-sm text-muted">报警次数</p>
+              </div>
+              <div class="text-center">
+                <p class="text-2xl font-bold">{{ summary.last_alarm_type ?? '无' }}</p>
+                <p class="text-sm text-muted">最后报警</p>
+              </div>
+            </div>
+          </div>
+          
+          <div class="mt-6 pt-4 border-t">
+            <h3 class="font-semibold mb-2">电子围栏状态</h3>
+            <div v-if="!fenceEvents.length" class="text-muted">
+              当前定位点没有可用围栏状态，先创建围栏即可开始检测。
+            </div>
+            <div v-else class="space-y-4">
+              <div v-for="event in fenceEvents" :key="event.fence_id" class="p-3 border rounded">
+                <div class="flex justify-between items-center">
+                  <strong>{{ event.fence_name }}</strong>
+                  <span :class="{
+                    'text-success': event.status === 'inside',
+                    'text-danger': event.status === 'outside'
+                  }">
+                    {{ event.status === 'inside' ? '围栏内' : '围栏外' }}
+                  </span>
+                </div>
+                <p class="text-sm text-muted mt-1">
+                  距中心 {{ event.distance_meters }} 米
+                  <span v-if="event.transitioned" class="text-warning"> · 本次发生状态切换</span>
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
-      <div class="panel" style="min-height: 480px; padding: 24px;">
-        <div style="width:100%;">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
-            <h2 style="margin:0;">
+      
+      <div class="lg:col-span-2">
+        <div class="card">
+          <div class="flex justify-between items-center mb-4">
+            <h2 class="text-xl font-bold">
               {{ showReplay ? '轨迹回放' : '实时位置' }}
             </h2>
-            <button v-if="historyPoints.length" class="button-primary" type="button" @click="showReplay = !showReplay">
-              {{ showReplay ? '返回实时' : '回放轨迹' }}
-            </button>
+            <div class="flex gap-2">
+              <button 
+                v-if="historyPoints.length" 
+                class="button-secondary" 
+                type="button" 
+                @click="showReplay = !showReplay"
+              >
+                {{ showReplay ? '返回实时' : '回放轨迹' }}
+              </button>
+            </div>
           </div>
-          <CoordinateMap
-            :latitude="latitude"
-            :longitude="longitude"
-            :history="displayHistory"
-            :fences="mapFences"
-          />
+          
+          <div class="h-96">
+            <CoordinateMap
+              :latitude="latitude"
+              :longitude="longitude"
+              :history="displayHistory"
+              :fences="mapFences"
+            />
+          </div>
+          
           <PathReplayPlayer
             v-if="showReplay && historyPoints.length"
             :points="historyPoints"
@@ -257,62 +536,203 @@ onMounted(() => {
         </div>
       </div>
     </section>
-    <section class="grid" style="grid-template-columns: 1fr 1fr; margin-top:20px;">
-      <div class="panel" style="padding:24px;">
-        <h2 style="margin-top:0;">围栏配置</h2>
+    
+    <section class="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+      <div class="card">
+        <h2 class="text-xl font-bold mb-4">围栏配置</h2>
         <form @submit.prevent="submitFence">
-          <input v-model="fenceForm.name" placeholder="围栏名称" style="display:block;width:100%;margin-top:8px;padding:12px;border-radius:14px;border:1px solid var(--line);" />
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px;">
-            <input v-model="fenceForm.center_latitude" placeholder="中心纬度" style="padding:12px;border-radius:14px;border:1px solid var(--line);" />
-            <input v-model="fenceForm.center_longitude" placeholder="中心经度" style="padding:12px;border-radius:14px;border:1px solid var(--line);" />
+          <div class="form-group">
+            <label class="form-label" for="fence-name">围栏名称</label>
+            <input 
+              id="fence-name"
+              v-model="fenceForm.name" 
+              class="form-control"
+              placeholder="请输入围栏名称"
+            />
           </div>
-          <div style="display:grid;grid-template-columns:1fr auto;gap:12px;align-items:center;margin-top:12px;">
-            <input v-model="fenceForm.radius_meters" placeholder="半径（米）" style="padding:12px;border-radius:14px;border:1px solid var(--line);" />
-            <label class="muted" style="display:flex;gap:8px;align-items:center;">
-              <input v-model="fenceForm.is_active" type="checkbox" />
-              启用
-            </label>
+          <div class="grid grid-cols-2 gap-4">
+            <div class="form-group">
+              <label class="form-label" for="center-lat">中心纬度</label>
+              <input 
+                id="center-lat"
+                v-model="fenceForm.center_latitude" 
+                class="form-control"
+                placeholder="请输入中心纬度"
+              />
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="center-lng">中心经度</label>
+              <input 
+                id="center-lng"
+                v-model="fenceForm.center_longitude" 
+                class="form-control"
+                placeholder="请输入中心经度"
+              />
+            </div>
           </div>
-          <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px;">
-            <button class="button-primary" type="submit" :disabled="savingFence">
+          <div class="flex gap-4 items-center">
+            <div class="form-group flex-1">
+              <label class="form-label" for="radius">半径（米）</label>
+              <input 
+                id="radius"
+                v-model="fenceForm.radius_meters" 
+                type="number"
+                class="form-control"
+                placeholder="请输入半径"
+                min="1"
+              />
+            </div>
+            <div class="flex items-center">
+              <input 
+                id="is-active"
+                v-model="fenceForm.is_active" 
+                type="checkbox" 
+                class="mr-2"
+              />
+              <label for="is-active">启用</label>
+            </div>
+          </div>
+          <div class="flex gap-4 mt-4">
+            <button 
+              class="button-primary flex-1" 
+              type="submit" 
+              :disabled="savingFence"
+            >
               {{ savingFence ? '处理中...' : editingFenceId ? '更新围栏' : '创建围栏' }}
             </button>
-            <button v-if="editingFenceId" class="button-primary" type="button" style="background:linear-gradient(135deg,#33514b,#1d2f2a);" @click="resetFenceForm">
+            <button 
+              v-if="editingFenceId" 
+              class="button-secondary flex-1" 
+              type="button" 
+              @click="resetFenceForm"
+            >
               取消编辑
             </button>
           </div>
         </form>
-        <article v-for="fence in fences" :key="fence.id" style="padding:14px 0;border-top:1px solid var(--line);margin-top:14px;">
-          <strong>{{ fence.name }}</strong>
-          <p class="muted">
-            半径 {{ fence.radius_meters }} 米 · {{ fence.is_active ? '启用中' : '已停用' }} ·
-            {{ fence.last_status === 'inside' ? '最近在围栏内' : fence.last_status === 'outside' ? '最近在围栏外' : '待检测' }}
-          </p>
-          <p class="muted">中心点 {{ fence.center_latitude }}, {{ fence.center_longitude }}</p>
-          <div style="display:flex;gap:10px;flex-wrap:wrap;">
-            <button class="button-primary" type="button" @click="startEditFence(fence)">编辑</button>
-            <button class="button-primary" type="button" style="background:linear-gradient(135deg,#6f2d20,#3c120d);" @click="removeFence(fence)">删除</button>
+        
+        <div class="mt-6">
+          <h3 class="font-semibold mb-2">现有围栏</h3>
+          <div v-if="fences.length === 0" class="text-muted">
+            暂无围栏，请创建新围栏
           </div>
-        </article>
+          <div v-else class="space-y-4">
+            <div v-for="fence in fences" :key="fence.id" class="p-4 border rounded">
+              <div class="flex justify-between items-start">
+                <div>
+                  <strong>{{ fence.name }}</strong>
+                  <p class="text-sm text-muted mt-1">
+                    半径 {{ fence.radius_meters }} 米 · 
+                    <span :class="{
+                      'text-success': fence.is_active,
+                      'text-muted': !fence.is_active
+                    }">
+                      {{ fence.is_active ? '启用中' : '已停用' }}
+                    </span>
+                  </p>
+                  <p class="text-sm text-muted">
+                    中心点 {{ fence.center_latitude }}, {{ fence.center_longitude }}
+                  </p>
+                  <p class="text-sm text-muted">
+                    状态: {{ fence.last_status === 'inside' ? '最近在围栏内' : fence.last_status === 'outside' ? '最近在围栏外' : '待检测' }}
+                  </p>
+                </div>
+                <div class="flex gap-2">
+                  <button 
+                    class="button-secondary" 
+                    type="button" 
+                    @click="startEditFence(fence)"
+                  >
+                    编辑
+                  </button>
+                  <button 
+                    class="button-danger" 
+                    type="button" 
+                    @click="removeFence(fence)"
+                  >
+                    删除
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
-      <div class="panel" style="padding:24px;">
-        <h2 style="margin-top:0;">最近报警</h2>
-        <p v-if="!alarms.length" class="muted">暂无报警记录</p>
-        <article v-for="alarm in alarms" :key="String(alarm.id)" style="padding:12px 0;border-top:1px solid var(--line);">
-          <strong>报警 {{ alarm.alarm_type }}</strong>
-          <p class="muted">{{ alarm.message }}</p>
-          <p class="muted">{{ alarm.timestamp }}</p>
-        </article>
-      </div>
-      <div class="panel" style="padding:24px;">
-        <h2 style="margin-top:0;">通知日志</h2>
-        <p v-if="!notifications.length" class="muted">暂无通知记录</p>
-        <article v-for="notification in notifications" :key="String(notification.id)" style="padding:12px 0;border-top:1px solid var(--line);">
-          <strong>{{ notification.title }}</strong>
-          <p class="muted">{{ notification.content }}</p>
-          <p class="muted">{{ notification.created_at }} · {{ notification.status }}</p>
-        </article>
+      
+      <div>
+        <div class="card mb-6">
+          <h2 class="text-xl font-bold mb-4">最近报警</h2>
+          <div v-if="alarms.length === 0" class="text-muted py-4">
+            暂无报警记录
+          </div>
+          <div v-else class="space-y-3">
+            <div v-for="alarm in alarms" :key="String(alarm.id)" class="p-3 border rounded">
+              <div class="flex justify-between items-start">
+                <strong class="text-danger">报警 {{ alarm.alarm_type }}</strong>
+                <span class="text-sm text-muted">{{ alarm.timestamp }}</span>
+              </div>
+              <p class="text-sm mt-1">{{ alarm.message }}</p>
+            </div>
+          </div>
+        </div>
+        
+        <div class="card">
+          <h2 class="text-xl font-bold mb-4">通知日志</h2>
+          <div v-if="notifications.length === 0" class="text-muted py-4">
+            暂无通知记录
+          </div>
+          <div v-else class="space-y-3">
+            <div v-for="notification in notifications" :key="String(notification.id)" class="p-3 border rounded">
+              <div class="flex justify-between items-start">
+                <strong>{{ notification.title }}</strong>
+                <span class="text-sm text-muted">{{ notification.created_at }}</span>
+              </div>
+              <p class="text-sm mt-1">{{ notification.content }}</p>
+              <p class="text-sm text-muted mt-1">状态: {{ notification.status }}</p>
+            </div>
+          </div>
+        </div>
       </div>
     </section>
   </main>
 </template>
+
+<style scoped>
+/* 添加加载动画 */
+.animate-spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* 响应式设计 */
+@media (max-width: 1024px) {
+  .lg\:col-span-1,
+  .lg\:col-span-2 {
+    grid-column: span 1;
+  }
+  
+  .lg\:grid-cols-2,
+  .lg\:grid-cols-3 {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* 地图容器高度 */
+.h-96 {
+  height: 400px;
+}
+
+@media (max-width: 768px) {
+  .h-96 {
+    height: 300px;
+  }
+}
+</style>

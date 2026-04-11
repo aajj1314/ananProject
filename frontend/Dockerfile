@@ -1,4 +1,5 @@
-FROM node:20-alpine
+# Build stage
+FROM node:20-alpine as build
 
 WORKDIR /app
 
@@ -15,15 +16,21 @@ COPY src ./src
 # Build application
 RUN npm run build
 
-# Install a simple server
-RUN npm install -g serve
+# Production stage
+FROM nginx:1.25-alpine
+
+# Copy built files from build stage
+COPY --from=build /app/dist /usr/share/nginx/html
+
+# Copy Nginx configuration
+COPY nginx.conf /etc/nginx/conf.d/default.conf
 
 # Expose port
-EXPOSE 8080
+EXPOSE 80
 
 # Healthcheck
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD wget --quiet --tries=1 --spider http://localhost:8080/ || exit 1
+    CMD wget --quiet --tries=1 --spider http://localhost/ || exit 1
 
-# Start application
-CMD ["serve", "-s", "dist", "-l", "8080"]
+# Start Nginx
+CMD ["nginx", "-g", "daemon off;"]

@@ -1,17 +1,36 @@
 <script setup lang="ts">
 import { computed, onUnmounted, ref, watch } from 'vue'
 
+/**
+ * 轨迹回放播放器组件
+ * 用于播放设备的历史轨迹，支持播放、暂停、重置和速度调整
+ */
+
+/**
+ * 位置点接口
+ */
 interface LocationPoint {
+  /** 纬度 */
   latitude: number
+  /** 经度 */
   longitude: number
+  /** 时间戳 */
   timestamp: string
+  /** 电量 */
   battery?: number
+  /** 速度 */
   speed?: number
 }
 
+/**
+ * 组件属性接口
+ */
 interface Props {
+  /** 轨迹点数组 */
   points: LocationPoint[]
+  /** 是否自动播放 */
   autoplay?: boolean
+  /** 播放速度 */
   speed?: number
 }
 
@@ -20,8 +39,13 @@ const props = withDefaults(defineProps<Props>(), {
   speed: 1,
 })
 
+/**
+ * 组件事件
+ */
 const emit = defineEmits<{
+  /** 当当前点变化时触发 */
   (e: 'pointChange', point: LocationPoint | null, index: number): void
+  /** 当播放状态变化时触发 */
   (e: 'playStateChange', playing: boolean): void
 }>()
 
