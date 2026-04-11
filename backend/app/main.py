@@ -35,40 +35,49 @@ settings = get_settings()
 async def lifespan(_: FastAPI):
     """Create schema on startup for the initial scaffold."""
 
-    async with engine.begin() as connection:
-        await connection.run_sync(Base.metadata.create_all)
+    try:
+        async with engine.begin() as connection:
+            await connection.run_sync(Base.metadata.create_all)
 
-        # Auto-migration: add missing columns to existing tables
-        from sqlalchemy import inspect, text
+            # Auto-migration: add missing columns to existing tables
+            from sqlalchemy import inspect, text
 
-        def _migrate_missing_columns(sync_conn):
-            """Check each table for missing columns and add them via ALTER TABLE."""
-            inspector = inspect(sync_conn)
-            for table_name, table_obj in Base.metadata.tables.items():
-                existing_columns = {col["name"] for col in inspector.get_columns(table_name)}
-                for column in table_obj.columns:
-                    if column.name not in existing_columns:
-                        col_type = column.type.compile(dialect=sync_conn.dialect)
-                        nullable = "" if column.nullable else " NOT NULL"
-                        default_clause = ""
-                        if column.server_default is not None:
-                            default_clause = f" DEFAULT {column.server_default.arg}"
-                        elif column.default is not None:
-                            default_val = column.default.arg
-                            if callable(default_val):
-                                # For func.now() style defaults, use CURRENT_TIMESTAMP
-                                default_clause = " DEFAULT CURRENT_TIMESTAMP"
-                            elif isinstance(default_val, str):
-                                # Sanitize default value to prevent SQL injection
-                                escaped_val = default_val.replace("'", "''")
-                                default_clause = f" DEFAULT '{escaped_val}'"
-                            else:
-                                default_clause = f" DEFAULT {default_val}"
-                        alter_sql = f"ALTER TABLE {table_name} ADD COLUMN {column.name} {col_type}{nullable}{default_clause}"
-                        print(f"Auto-migration: {alter_sql}")
-                        sync_conn.execute(text(alter_sql))
+            def _migrate_missing_columns(sync_conn):
+                """Check each table for missing columns and add them via ALTER TABLE."""
+                inspector = inspect(sync_conn)
+                for table_name, table_obj in Base.metadata.tables.items():
+                    try:
+                        existing_columns = {col["name"] for col in inspector.get_columns(table_name)}
+                    except Exception:
+                        existing_columns = set()
+                    for column in table_obj.columns:
+                        if column.name not in existing_columns:
+                            col_type = column.type.compile(dialect=sync_conn.dialect)
+                            nullable = "" if column.nullable else " NOT NULL"
+                            default_clause = ""
+                            if column.server_default is not None:
+                                default_clause = f" DEFAULT {column.server_default.arg}"
+                            elif column.default is not None:
+                                default_val = column.default.arg
+                                if callable(default_val):
+                                    # For func.now() style defaults, use CURRENT_TIMESTAMP
+                                    default_clause = " DEFAULT CURRENT_TIMESTAMP"
+                                elif isinstance(default_val, str):
+                                    # Sanitize default value to prevent SQL injection
+                                    escaped_val = default_val.replace("'", "''")
+                                    default_clause = f" DEFAULT '{escaped_val}'"
+                                else:
+                                    default_clause = f" DEFAULT {default_val}"
+                            alter_sql = f"ALTER TABLE {table_name} ADD COLUMN {column.name} {col_type}{nullable}{default_clause}"
+                            print(f"Auto-migration: {alter_sql}")
+                            sync_conn.execute(text(alter_sql))
 
-        await connection.run_sync(_migrate_missing_columns)
+            await connection.run_sync(_migrate_missing_columns)
+    except Exception as e:
+        # Ignore "table already exists" errors from concurrent worker startup
+        if "already exists" not in str(e):
+            raise
+        print(f"Startup schema init skipped (likely concurrent worker): {e}")
 
     # Create default admin user if not exists
     from sqlalchemy.ext.asyncio import AsyncSession

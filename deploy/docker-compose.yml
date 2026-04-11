@@ -1,3 +1,8 @@
+# ============================================================
+# 智慧养老鞋垫平台 - Docker Compose 部署配置
+# 完全自包含，无需外部 .env 文件即可一键运行
+# ============================================================
+
 services:
   # Backend API service
   backend:
@@ -6,8 +11,6 @@ services:
       dockerfile: Dockerfile
     image: elderly-care-backend:latest
     container_name: elderly-care-backend
-    env_file:
-      - .env.production
     environment:
       - APP_NAME=elderly-insole-platform
       - APP_ENV=production
@@ -15,17 +18,18 @@ services:
       - API_V1_PREFIX=/api/v1
       - DATABASE_URL=sqlite+aiosqlite:///./data/elderly_insole.db
       - REDIS_URL=redis://redis:6379/0
-      - JWT_SECRET=${JWT_SECRET}
+      - JWT_SECRET=${JWT_SECRET:-elderly-care-default-jwt-secret-2024-change-in-production}
       - JWT_ALGORITHM=HS256
       - JWT_EXPIRE_MINUTES=${JWT_EXPIRE_MINUTES:-1440}
       - RATE_LIMIT_REQUESTS=60
       - RATE_LIMIT_WINDOW_SECONDS=60
       - CACHE_TTL_SECONDS=120
       - NOTIFICATION_CHANNELS=["in_app"]
-      - ADMIN_PHONE=15577305913
-      - ADMIN_PASSWORD=passwor
+      - ADMIN_PHONE=${ADMIN_PHONE:-15577305913}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-passwor}
+      - CORS_ORIGINS=["http://localhost:8081","http://127.0.0.1:8081"]
     ports:
-      - "8000:8000"
+      - "${BACKEND_PORT:-8000}:8000"
     volumes:
       - backend_data:/app/data
     depends_on:
@@ -51,6 +55,9 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+    profiles:
+      - prod
+      - dev
 
   # Frontend web service
   frontend:
@@ -60,7 +67,7 @@ services:
     image: elderly-care-frontend:latest
     container_name: elderly-care-frontend
     ports:
-      - "8081:80"
+      - "${FRONTEND_PORT:-8081}:80"
     depends_on:
       backend:
         condition: service_healthy
@@ -84,6 +91,9 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+    profiles:
+      - prod
+      - dev
 
   # Redis cache service
   redis:
@@ -112,6 +122,9 @@ services:
       options:
         max-size: "5m"
         max-file: "3"
+    profiles:
+      - prod
+      - dev
 
 # Volumes for persistent data
 volumes:
